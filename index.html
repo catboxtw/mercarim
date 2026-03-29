@@ -7,7 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         input, select { font-size: 16px !important; }
-        .delete-btn { display: flex; align-items: center; justify-content: center; width: 45px; }
+        /* 確保Unicode圖示在不同裝置上都顯示為紅色 */
+        .delete-icon { color: #ef4444; font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
     </style>
 </head>
 <body class="bg-slate-50 p-4">
@@ -19,11 +20,12 @@
         <div class="mb-4">
             <label class="block text-sm font-semibold text-slate-600 mb-1">商品 ID (Mercari ID)</label>
             <div id="id-container">
-                <div class="flex mb-2">
+                <div class="flex items-center mb-2 gap-2">
                     <input type="text" class="mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="m12345678901">
-                    <div class="w-[45px]"></div> </div>
+                    <div class="w-12 h-12 flex-shrink-0"></div> 
+                </div>
             </div>
-            <button type="button" onclick="addIdField()" class="text-sm text-blue-600 font-bold mt-1 px-2 py-1 bg-blue-50 rounded">+ 新增商品欄位</button>
+            <button type="button" onclick="addIdField()" class="text-sm text-blue-700 font-bold mt-2 px-3 py-2 bg-blue-50 rounded-lg active:bg-blue-100 transition-colors">+ 新增商品欄位</button>
         </div>
 
         <hr class="my-5 border-slate-100">
@@ -47,7 +49,7 @@
             <p id="loading-buyers" class="text-xs text-blue-500 mt-1 hidden">正在從 Google Sheet 抓取名單...</p>
         </div>
 
-        <button onclick="submitForm()" id="submit-btn" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg shadow-blue-200 shadow-lg active:scale-95 transition-transform">
+        <button onclick="submitForm()" id="submit-btn" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-blue-200 shadow-lg active:scale-95 transition-transform text-lg">
             確認送出 Email
         </button>
         <p id="msg" class="mt-4 text-center text-sm font-medium"></p>
@@ -57,21 +59,21 @@
         // ⚠️ 請替換為你的 GAS Web App URL
         const API_URL = 'https://script.google.com/macros/s/AKfycby2I6Q2M67npEFW-Vqi14JS3L7rtuQ9DLD35KwhwCaGpyt3xBnRfNyeLcOGXfslA9sx/exec'; 
 
-        // 新增欄位功能 (帶刪除鈕)
+        // 新增欄位功能 (使用 Unicode ❌ 圖示，確保顯示)
         function addIdField() {
             const container = document.getElementById('id-container');
             const wrapper = document.createElement('div');
-            wrapper.className = 'flex mb-2 animate-fadeIn';
+            // 使用 gap-2 增加間距，items-center 垂直居中
+            wrapper.className = 'flex items-center mb-2 animate-fadeIn gap-2'; 
             
             wrapper.innerHTML = `
                 <input type="text" class="mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="m12345678901">
-                <button onclick="this.parentElement.remove()" class="delete-btn text-red-500 hover:text-red-700 transition-colors" title="刪除">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                <button onclick="this.parentElement.remove()" class="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-red-50 hover:bg-red-100 rounded-full transition-colors group" title="刪除此行">
+                    <span class="delete-icon text-2xl group-hover:scale-110 transition-transform">❌</span>
                 </button>
             `;
             container.appendChild(wrapper);
+            // 自動聚焦到新欄位
             wrapper.querySelector('input').focus();
         }
 
@@ -110,13 +112,13 @@
             const buyerName = document.getElementById('buyer-name').value.trim();
 
             if (ids.length === 0 || !platform || !buyerName) {
-                alert('請填寫完整資訊');
+                alert('請填寫完整資訊：商品ID、平台、購入者');
                 return;
             }
 
             btn.disabled = true;
             btn.classList.add('opacity-50');
-            btn.innerText = '正在傳送...';
+            btn.innerText = '正在傳送 Email...';
             msg.innerText = "";
 
             const params = new URLSearchParams();
@@ -133,13 +135,13 @@
                 });
                 const result = await res.json();
                 if (result.success) {
-                    msg.className = "mt-4 text-center text-sm font-bold text-green-600";
-                    msg.innerText = "✅ 成功！Email 已發出，請檢查 Sheet 更新。";
-                    // 重置頁面
+                    msg.className = "mt-4 text-center text-sm font-bold text-green-600 animate-pulse";
+                    msg.innerText = "✅ 成功！資料已送出。";
+                    // 重置頁面，保留第一行
                     document.getElementById('id-container').innerHTML = `
-                        <div class="flex mb-2">
+                        <div class="flex items-center mb-2 gap-2">
                             <input type="text" class="mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none" placeholder="m12345678901">
-                            <div class="w-[45px]"></div>
+                            <div class="w-12 h-12 flex-shrink-0"></div>
                         </div>`;
                     document.getElementById('buyer-name').value = '';
                 } else {
