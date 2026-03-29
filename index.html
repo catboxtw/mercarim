@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mercari 快速錄入</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        input, select { font-size: 16px !important; } /* 防止 iOS 自動放大 */
+    </style>
+</head>
+<body class="bg-slate-50 p-4">
+    <div class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-lg border border-slate-100">
+        <h2 class="text-xl font-bold mb-5 text-slate-800 flex items-center">
+            <span class="mr-2">📝</span> Mercari 購買資訊提交
+        </h2>
+        
+        <div class="mb-4">
+            <label class="block text-sm font-semibold text-slate-600 mb-1">商品 ID</label>
+            <div id="id-container">
+                <input type="text" class="mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg mb-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="m12345678901">
+            </div>
+            <button type="button" onclick="addIdField()" class="text-sm text-blue-600 font-medium">+ 新增商品欄位</button>
+        </div>
+
+        <hr class="my-5 border-slate-100">
+
+        <div class="mb-4">
+            <label class="block text-sm font-semibold text-slate-600 mb-1">購買平台</label>
+            <select id="platform" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none" onchange="fetchBuyers()">
+                <option value="">-- 請選擇 --</option>
+                <option value="FB">FB</option>
+                <option value="IG">IG</option>
+                <option value="Line">Line</option>
+                <option value="Taiwan">Taiwan</option>
+                <option value="Whatsapp">Whatsapp</option>
+            </select>
+        </div>
+
+        <div class="mb-6">
+            <label class="block text-sm font-semibold text-slate-600 mb-1">購入者</label>
+            <input list="buyer-options" id="buyer-name" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none" placeholder="搜尋或直接輸入名稱">
+            <datalist id="buyer-options"></datalist>
+            <p id="loading-buyers" class="text-xs text-slate-400 mt-1 hidden">正在加載該平台名單...</p>
+        </div>
+
+        <button onclick="submitForm()" id="submit-btn" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg shadow-blue-200 shadow-lg active:scale-95 transition-transform">
+            確認送出
+        </button>
+        <p id="msg" class="mt-4 text-center text-sm font-medium"></p>
+    </div>
+
+    <script>
+        // ⚠️ 這裡請填入你的 GAS Web App URL
+        const API_URL = 'https://script.google.com/macros/s/AKfycby2I6Q2M67npEFW-Vqi14JS3L7rtuQ9DLD35KwhwCaGpyt3xBnRfNyeLcOGXfslA9sx/exec'; 
+
+        function addIdField() {
+            const container = document.getElementById('id-container');
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg mb-2 outline-none';
+            input.placeholder = 'm12345678901';
+            container.appendChild(input);
+            input.focus();
+        }
+
+        async function fetchBuyers() {
+            const platform = document.getElementById('platform').value;
+            const loader = document.getElementById('loading-buyers');
+            const datalist = document.getElementById('buyer-options');
+            if (!platform) return;
+
+            loader.classList.remove('hidden');
+            try {
+                const res = await fetch(`${API_URL}?action=getBuyerList&platform=${platform}`);
+                const data = await res.json();
+                datalist.innerHTML = '';
+                data.buyers.forEach(name => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    datalist.appendChild(opt);
+                });
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        async function submitForm() {
+            const btn = document.getElementById('submit-btn');
+            const msg = document.getElementById('msg');
+            const ids = Array.from(document.querySelectorAll('.mercari-id')).map(i => i.value.trim()).filter(v => v);
+            const platform = document.getElementById('platform').value;
+            const buyerName = document.getElementById('buyer-name').value.trim();
+
+            if (ids.length === 0 || !platform || !buyerName) {
+                alert('商品ID、平台、購入者都要填寫喔！');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+            btn.innerText = '正在傳送 Email...';
+            msg.innerText = "";
+
+            const params = new URLSearchParams();
+            params.append('action', 'submitBuyerEmail');
+            params.append('ids', ids.join(','));
+            params.append('platform', platform);
+            params.append('buyerName', buyerName);
+
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    body: params,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                });
+                const result = await res.json();
+                if (result.success) {
+                    msg.className = "mt-4 text-center text-sm font-medium text-green-600";
+                    msg.innerText = "✅ 成功送出！請稍後查看 Sheet 更新。";
+                    // 重置
+                    document.getElementById('id-container').innerHTML = '<input type="text" class="mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg mb-2 outline-none" placeholder="m12345678901">';
+                    document.getElementById('buyer-name').value = '';
+                } else {
+                    throw new Error(result.error || '傳送失敗');
+                }
+            } catch (err) {
+                msg.className = "mt-4 text-center text-sm font-medium text-red-600";
+                msg.innerText = "❌ 失敗: " + err.message;
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+                btn.innerText = '確認送出';
+            }
+        }
+    </script>
+</body>
+</html>
