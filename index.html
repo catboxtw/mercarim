@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mercari 快速錄入</title>
+    <title>Mercari 快速錄入 (私密版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        input, select { font-size: 16px !important; } /* 防止 iOS 自動放大 */
+        input, select { font-size: 16px !important; }
+        .delete-btn { display: flex; align-items: center; justify-content: center; width: 45px; }
     </style>
 </head>
 <body class="bg-slate-50 p-4">
@@ -16,11 +17,13 @@
         </h2>
         
         <div class="mb-4">
-            <label class="block text-sm font-semibold text-slate-600 mb-1">商品 ID</label>
+            <label class="block text-sm font-semibold text-slate-600 mb-1">商品 ID (Mercari ID)</label>
             <div id="id-container">
-                <input type="text" class="mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg mb-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="m12345678901">
+                <div class="flex mb-2">
+                    <input type="text" class="mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="m12345678901">
+                    <div class="w-[45px]"></div> </div>
             </div>
-            <button type="button" onclick="addIdField()" class="text-sm text-blue-600 font-medium">+ 新增商品欄位</button>
+            <button type="button" onclick="addIdField()" class="text-sm text-blue-600 font-bold mt-1 px-2 py-1 bg-blue-50 rounded">+ 新增商品欄位</button>
         </div>
 
         <hr class="my-5 border-slate-100">
@@ -38,30 +41,38 @@
         </div>
 
         <div class="mb-6">
-            <label class="block text-sm font-semibold text-slate-600 mb-1">購入者</label>
+            <label class="block text-sm font-semibold text-slate-600 mb-1">購入者 (自動聯想)</label>
             <input list="buyer-options" id="buyer-name" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none" placeholder="搜尋或直接輸入名稱">
             <datalist id="buyer-options"></datalist>
-            <p id="loading-buyers" class="text-xs text-slate-400 mt-1 hidden">正在加載該平台名單...</p>
+            <p id="loading-buyers" class="text-xs text-blue-500 mt-1 hidden">正在從 Google Sheet 抓取名單...</p>
         </div>
 
         <button onclick="submitForm()" id="submit-btn" class="w-full bg-blue-600 text-white font-bold py-4 rounded-lg shadow-blue-200 shadow-lg active:scale-95 transition-transform">
-            確認送出
+            確認送出 Email
         </button>
         <p id="msg" class="mt-4 text-center text-sm font-medium"></p>
     </div>
 
     <script>
-        // ⚠️ 這裡請填入你的 GAS Web App URL
+        // ⚠️ 請替換為你的 GAS Web App URL
         const API_URL = 'https://script.google.com/macros/s/AKfycby2I6Q2M67npEFW-Vqi14JS3L7rtuQ9DLD35KwhwCaGpyt3xBnRfNyeLcOGXfslA9sx/exec'; 
 
+        // 新增欄位功能 (帶刪除鈕)
         function addIdField() {
             const container = document.getElementById('id-container');
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg mb-2 outline-none';
-            input.placeholder = 'm12345678901';
-            container.appendChild(input);
-            input.focus();
+            const wrapper = document.createElement('div');
+            wrapper.className = 'flex mb-2 animate-fadeIn';
+            
+            wrapper.innerHTML = `
+                <input type="text" class="mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="m12345678901">
+                <button onclick="this.parentElement.remove()" class="delete-btn text-red-500 hover:text-red-700 transition-colors" title="刪除">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            `;
+            container.appendChild(wrapper);
+            wrapper.querySelector('input').focus();
         }
 
         async function fetchBuyers() {
@@ -75,11 +86,15 @@
                 const res = await fetch(`${API_URL}?action=getBuyerList&platform=${platform}`);
                 const data = await res.json();
                 datalist.innerHTML = '';
-                data.buyers.forEach(name => {
-                    const opt = document.createElement('option');
-                    opt.value = name;
-                    datalist.appendChild(opt);
-                });
+                if(data.buyers) {
+                    data.buyers.forEach(name => {
+                        const opt = document.createElement('option');
+                        opt.value = name;
+                        datalist.appendChild(opt);
+                    });
+                }
+            } catch(e) {
+                console.error("抓取名單失敗", e);
             } finally {
                 loader.classList.add('hidden');
             }
@@ -88,18 +103,20 @@
         async function submitForm() {
             const btn = document.getElementById('submit-btn');
             const msg = document.getElementById('msg');
-            const ids = Array.from(document.querySelectorAll('.mercari-id')).map(i => i.value.trim()).filter(v => v);
+            const ids = Array.from(document.querySelectorAll('.mercari-id'))
+                             .map(i => i.value.trim())
+                             .filter(v => v);
             const platform = document.getElementById('platform').value;
             const buyerName = document.getElementById('buyer-name').value.trim();
 
             if (ids.length === 0 || !platform || !buyerName) {
-                alert('商品ID、平台、購入者都要填寫喔！');
+                alert('請填寫完整資訊');
                 return;
             }
 
             btn.disabled = true;
             btn.classList.add('opacity-50');
-            btn.innerText = '正在傳送 Email...';
+            btn.innerText = '正在傳送...';
             msg.innerText = "";
 
             const params = new URLSearchParams();
@@ -116,21 +133,25 @@
                 });
                 const result = await res.json();
                 if (result.success) {
-                    msg.className = "mt-4 text-center text-sm font-medium text-green-600";
-                    msg.innerText = "✅ 成功送出！請稍後查看 Sheet 更新。";
-                    // 重置
-                    document.getElementById('id-container').innerHTML = '<input type="text" class="mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg mb-2 outline-none" placeholder="m12345678901">';
+                    msg.className = "mt-4 text-center text-sm font-bold text-green-600";
+                    msg.innerText = "✅ 成功！Email 已發出，請檢查 Sheet 更新。";
+                    // 重置頁面
+                    document.getElementById('id-container').innerHTML = `
+                        <div class="flex mb-2">
+                            <input type="text" class="mercari-id w-full p-3 bg-slate-50 border border-slate-200 rounded-lg outline-none" placeholder="m12345678901">
+                            <div class="w-[45px]"></div>
+                        </div>`;
                     document.getElementById('buyer-name').value = '';
                 } else {
                     throw new Error(result.error || '傳送失敗');
                 }
             } catch (err) {
-                msg.className = "mt-4 text-center text-sm font-medium text-red-600";
-                msg.innerText = "❌ 失敗: " + err.message;
+                msg.className = "mt-4 text-center text-sm font-bold text-red-600";
+                msg.innerText = "❌ 錯誤: " + err.message;
             } finally {
                 btn.disabled = false;
                 btn.classList.remove('opacity-50');
-                btn.innerText = '確認送出';
+                btn.innerText = '確認送出 Email';
             }
         }
     </script>
